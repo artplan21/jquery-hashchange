@@ -19,43 +19,62 @@
         return this;
       }
 
+      if (!settings.hash instanceof RegExp) {
+        // see https://developer.mozilla.org/en/docs/Web/JavaScript/Guide/Regular_Expressions#Using_Special_Characters
+        settings.hash = new RegExp("/^" + String(settings.hash).replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, "\\$&") + "$/g");
+      }
+
       // bind to hashchange at first time and init global variables
       if (!$.hashchange) {
         $.hashchange = {};
+        $.hashchange.hashs = [];
         $.hashchange.onSet = {};
         $.hashchange.onRemove = {};
-        $.hashchange.prevHash = "";
+        $.hashchange.prevHash = null;
 
         $.hashchange.listener = function() {
+          var currentHash, onRemove, onSet, i;
+          //console.log(window.location.hash, settings.hash.test(window.location.hash) ? '1' : '0');
+
           // if hash didn't change - do nothing
-          if (window.location.hash === $.hashchange.prevHash) {
-            return;
+          if ($.hashchange.prevHash !== null && $.hashchange.prevHash.test(window.location.hash)) {
+            return ;
           }
 
-          var onRemove = $.hashchange.onRemove[$.hashchange.prevHash],
-              onSet = $.hashchange.onSet[window.location.hash];
+          for(i=0; i < $.hashchange.hashs.length; i++) {
+            currentHash = $.hashchange.hashs[i];
 
-          if (onRemove) {
-            onRemove();
+            if (!currentHash.test(window.location.hash)) {
+              continue;
+            }
+
+            onRemove = $.hashchange.onRemove[String($.hashchange.prevHash || "")];
+            onSet = $.hashchange.onSet[String(currentHash)];
+
+            if (onRemove) {
+              onRemove(window.location.hash);
+            }
+
+            if (onSet) {
+              onSet(window.location.hash);
+            }
+
+            $.hashchange.prevHash = currentHash;
           }
 
-          if (onSet) {
-            onSet();
-          }
-
-          $.hashchange.prevHash = window.location.hash;
         };
 
         this.bind("hashchange", $.hashchange.listener);
       }
 
-      $.hashchange.onSet[settings.hash] = settings.onSet;
-      $.hashchange.onRemove[settings.hash] = settings.onRemove;
+      $.hashchange.hashs.push(settings.hash);
+      $.hashchange.onSet[String(settings.hash)] = settings.onSet;
+      $.hashchange.onRemove[String(settings.hash)] = settings.onRemove;
 
       // fire hashchange if current hash equals given
       // and it is not already active
-      if (window.location.hash === settings.hash &&
-          window.location.hash !== $.hashchange.prevHash) {
+      if (settings.hash.test(String(window.location.hash)) &&
+          ($.hashchange.prevHash === null || !$.hashchange.prevHash.test(window.location.hash))) {
         $.hashchange.listener();
       }
 
